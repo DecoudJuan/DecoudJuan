@@ -1,7 +1,7 @@
 <h1 align="center">Juan Manuel Decoud</h1>
 
 <p align="center">
-  <b>Support &amp; Integrations Engineer at Darwin AI</b> · Computer Engineering @ Universidad Austral
+  <b>Support &amp; AI Automation Engineer </b> · Computer Engineering @ Universidad Austral
 </p>
 
 <p align="center">
@@ -16,7 +16,7 @@ I build the unglamorous half of software: the integrations, the fallbacks and
 the checks that decide whether a workflow still runs at 3 a.m. on a Tuesday.
 
 Day to day that is n8n and Zapier pipelines against HubSpot, Salesforce and
-Pipedrive at **Darwin AI**. On my own time it is shipped products — a Rust
+Pipedrive at my job. On my own time it is shipped products — a Rust
 security scanner, a precision-first playlist migrator, a desktop app that
 replaced a legacy Access system in a real business — built to degrade
 gracefully instead of failing loudly.
