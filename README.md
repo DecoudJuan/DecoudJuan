@@ -59,7 +59,7 @@ Clients, products and documents in PySide6 over SQLite. The Access migration is 
 
 ### 🗺️ [Track Optimizer](https://github.com/DecoudJuan/TrackOptimizer) · JavaScript
 
-Orders a list of stops into the shortest driving route. [**Live →**](https://googlemapsgigaoptimizer.vercel.app)
+Orders a list of stops into the shortest driving route. [**Live →**](https://trackoptimizer.vercel.app)
 
 Google Maps routes stops in the order you type them; for a delivery round the *order* is the whole problem. Nearest-neighbour lands ~20–25% above optimal, so a 2-opt pass uncrosses the path and pulls it to within ~5%. Built on Leaflet, OpenStreetMap, Nominatim and OSRM, so it needs no billing account and runs the moment you clone it — one `index.html`, no build step.
 
