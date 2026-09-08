@@ -27,7 +27,7 @@ gracefully instead of failing loudly.
 
 ### 🎵 [Migratify](https://github.com/DecoudJuan/Migratify) · Python
 
-Migrates playlists between Spotify and YouTube Music, in both directions, **without adding the wrong song.**
+Migrates playlists between Spotify and YouTube Music, in both directions, **without adding the wrong song.** [**Site →**](https://decoudjuan.github.io/Migratify/)
 
 The same title exists as a cover, a karaoke track, a live take, a remix and as a completely different song by a completely different artist. Most migrators take the first search result and hand you a playlist that is quietly 15% wrong. Migratify scores candidates on artist, title, duration, album and result type, hard-vetoes wrong-artist and wrong-version matches, and when it still cannot tell two candidates apart it **asks instead of guessing**. Nothing is written until you run `apply`.
 
