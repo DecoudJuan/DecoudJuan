@@ -25,6 +25,14 @@ gracefully instead of failing loudly.
 
 ## Selected work
 
+### 🎸 [Guitar Learning](https://github.com/DecoudJuan/Guitar-Learning) · TypeScript
+
+A guitar class that watches you play and corrects your fretting hand, finger by finger. [**Live →**](https://guitar-learning-ten.vercel.app)
+
+It makes no sound — the sound is your guitar. You mark the four corners of the fretboard once, and a four-point homography turns any pixel into a (string, fret) position; the same maths used the other way, as registration against the frame you calibrated in, keeps the grid on the neck as the guitar shifts in your lap. MediaPipe puts the hand on top of that, and the verdict is **per finger, never per chord** — "wrong" teaches nobody anything, so what shows on screen is one arrow from where a finger is to where it goes. Everything runs in the browser: no backend, one runtime dependency, and a single network request, enforced by CSP rather than promised.
+
+`computer vision` · `homography` · `MediaPipe` · `zero backend` · `Vite + TS`
+
 ### 🎵 [Migratify](https://github.com/DecoudJuan/Migratify) · Python
 
 Migrates playlists between Spotify and YouTube Music, in both directions, **without adding the wrong song.** [**Site →**](https://decoudjuan.github.io/Migratify/)
