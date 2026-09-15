@@ -1,8 +1,11 @@
-<h1 align="center">Juan Manuel Decoud</h1>
-
 <p align="center">
-  <b>Support &amp; AI Automation Engineer </b> · Computer Engineering @ Universidad Austral
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/header-dark.svg">
+    <img src="assets/header-light.svg" width="762" alt="Juan M. Decoud — Support &amp; AI Automation Engineer, Buenos Aires. Python, TypeScript, Rust.">
+  </picture>
 </p>
+
+<h1 align="center">Juan Manuel Decoud</h1>
 
 <p align="center">
   <a href="https://decoudjuan.github.io"><img src="https://img.shields.io/badge/Portfolio-decoudjuan.github.io-10131a?style=flat-square" alt="Portfolio"></a>
