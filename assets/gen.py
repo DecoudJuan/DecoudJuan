@@ -4,10 +4,15 @@
 Todo es un unico SVG sin JS ni fuentes externas, porque GitHub sirve la imagen
 del README dentro de un <img>: ahi corren CSS y SMIL, y nada mas.
 
-La VISUAL.MAP cicla cuatro figuras hechas con la misma nube de puntos. El ciclo
-es un disolvido -- cada figura se arma escalando y se deshace -- y no un morph
-punto a punto: eso ultimo pide dos <animate> por punto y duplica el peso del
-archivo, que en un README se paga en cada visita.
+La VISUAL.MAP cicla cuatro figuras y los puntos VIAJAN de una a la otra: es la
+misma nube reacomodandose, no un disolvido. Cada punto lleva sus tres destinos
+en custom properties y un unico @keyframes los usa. Eso se eligio sobre SMIL
+(<animateTransform> por punto) por dos razones: pesa la mitad, y se puede apagar
+con prefers-reduced-motion, cosa que a SMIL no se le puede pedir desde CSS.
+
+El destino se guarda como desplazamiento relativo a la primera figura, que es la
+que va en cx/cy. Si el navegador no resolviera las variables, la card se queda
+quieta en el </> en vez de amontonar todos los puntos en el origen.
 """
 import io, math, random
 
@@ -20,9 +25,10 @@ SEED = 7
 CX, CY = 150, 170          # centro de la VISUAL.MAP
 
 # --- nube -----------------------------------------------------------------
-# los puntos van por figura: a igual cantidad, un trazo grueso se ralea
-# y uno fino se empasta.
-CYCLE = 18.0               # segundos de vuelta completa
+N_PTS = 1500               # la misma nube en todas las figuras: los puntos viajan
+CYCLE = 20.0               # segundos de vuelta completa
+HOLD = 0.18                # del ciclo, cuanto se queda quieta cada figura
+                           # (con 4 figuras el turno es 25%: 18% quieta, 7% viajando)
 TWINKLE = 0.30             # fraccion de puntos que titila
 K_GROUPS = 7               # fases de titileo, para que no lateen todos juntos
 
@@ -32,14 +38,14 @@ OPS = [1.0, 0.82, 0.55, 0.3]
 
 # --- figuras --------------------------------------------------------------
 def glyph():
-    """El </> de dev. Trazo grueso: es la figura ancla, tiene que pesar."""
+    """El </> de dev. Es la figura ancla y la que queda si algo falla."""
     polys = [
         [(112, 96), (56, 170), (112, 244)],   # <
         [(128, 252), (172, 88)],              # /
         [(188, 96), (244, 170), (188, 244)],  # >
     ]
     s = 1.12
-    return [[(CX + (x - CX) * s, CY + (y - CY) * s) for x, y in p] for p in polys], 9.5, 2000
+    return [[(CX + (x - CX) * s, CY + (y - CY) * s) for x, y in p] for p in polys], 8.6
 
 
 def ring():
@@ -52,7 +58,7 @@ def ring():
         a = 2 * math.pi * i / 12
         spokes.append([(CX + 46 * math.cos(a), CY + 46 * math.sin(a)),
                        (CX + 62 * math.cos(a), CY + 62 * math.sin(a))])
-    return [circle(96), circle(38)] + spokes, 5.0, 1150
+    return [circle(96), circle(38)] + spokes, 5.0
 
 
 def grid():
@@ -67,7 +73,7 @@ def grid():
     # diagonales sueltas, para que no sea una malla perfecta
     paths.append([(x0, y0), (x0 + step * (n - 1), y0 + step * (n - 1))])
     paths.append([(x0 + step * (n - 1), y0), (x0, y0 + step * (n - 1))])
-    return paths, 4.2, 1150
+    return paths, 4.2
 
 
 def serpentine():
@@ -77,11 +83,10 @@ def serpentine():
         pts = []
         for i in range(161):
             t = i / 160
-            x = CX - 115 + 230 * t
-            y = CY + amp * math.sin(2 * math.pi * (1.5 * t) + k * math.pi / 2)
-            pts.append((x, y))
+            paths_x = CX - 115 + 230 * t
+            pts.append((paths_x, CY + amp * math.sin(2 * math.pi * 1.5 * t + k * math.pi / 2)))
         paths.append(pts)
-    return paths, 5.5, 1050
+    return paths, 5.5
 
 
 SHAPES = [("GLYPH-CLOUD", glyph), ("ORBIT", ring),
@@ -90,7 +95,11 @@ SHAPES = [("GLYPH-CLOUD", glyph), ("ORBIT", ring),
 
 # --- muestreo -------------------------------------------------------------
 def sample(paths, half, n_pts, rnd):
-    """Reparte n_pts a lo largo de las polilineas, con grosor y jitter."""
+    """Exactamente n_pts sobre las polilineas, con grosor y jitter.
+
+    Devuelve (x, y, borde 0..1). El borde solo se usa en la primera figura,
+    para pintar: el color de un punto no cambia cuando viaja.
+    """
     segs = []
     for poly in paths:
         for a, b in zip(poly, poly[1:]):
@@ -100,23 +109,39 @@ def sample(paths, half, n_pts, rnd):
     total = sum(s[2] for s in segs)
 
     pts = []
-    for a, b, L in segs:
-        dx, dy = (b[0] - a[0]) / L, (b[1] - a[1]) / L
-        px, py = -dy, dx                                   # perpendicular unitaria
-        for _ in range(max(1, int(round(n_pts * L / total)))):
-            t = rnd.random() * L
-            if rnd.random() < 0.10:                        # los que se escapan
-                off = math.copysign(half * (1.1 + rnd.random() * 1.5), rnd.random() - 0.5)
-            else:
-                # potencia < 1 aplana el centro: densidad pareja a lo ancho
-                off = math.copysign(half * rnd.random() ** 0.72, rnd.random() - 0.5)
-            jit = rnd.gauss(0, 1.6)                        # jitter sobre el eje
-            pts.append((a[0] + dx * t + px * off + dx * jit,
-                        a[1] + dy * t + py * off + dy * jit,
-                        min(1.0, abs(off) / (half * 1.25)),
-                        rnd.random()))
-    rnd.shuffle(pts)
-    return pts
+    while len(pts) < n_pts:
+        for a, b, L in segs:
+            dx, dy = (b[0] - a[0]) / L, (b[1] - a[1]) / L
+            px, py = -dy, dx                               # perpendicular unitaria
+            for _ in range(max(1, int(round(n_pts * L / total)))):
+                if len(pts) >= n_pts:
+                    break
+                t = rnd.random() * L
+                if rnd.random() < 0.10:                    # los que se escapan
+                    off = math.copysign(half * (1.1 + rnd.random() * 1.5), rnd.random() - 0.5)
+                else:
+                    # potencia < 1 aplana el centro: densidad pareja a lo ancho
+                    off = math.copysign(half * rnd.random() ** 0.72, rnd.random() - 0.5)
+                jit = rnd.gauss(0, 1.6)                    # jitter sobre el eje
+                x = a[0] + dx * t + px * off + dx * jit
+                y = a[1] + dy * t + py * off + dy * jit
+                # recortar aca y no al escribir: las cuatro figuras tienen que
+                # terminar con la misma cantidad de puntos para poder emparejarse
+                x = min(max(x, 20.0), MAP_W - 20.0)
+                y = min(max(y, 32.0), BODY_H - 32.0)
+                pts.append((x, y, min(1.0, abs(off) / (half * 1.25))))
+    return pts[:n_pts]
+
+
+def by_angle(pts):
+    """Ordena por angulo alrededor del centro.
+
+    Es lo que empareja un punto de una figura con el de la siguiente: al viajar
+    cada uno se queda en su sector, la nube gira y se reacomoda en vez de
+    cruzarse en diagonal contra si misma.
+    """
+    return sorted(pts, key=lambda p: (math.atan2(p[1] - CY, p[0] - CX),
+                                      math.hypot(p[0] - CX, p[1] - CY)))
 
 
 def classify(edge, roll):
@@ -131,16 +156,6 @@ def classify(edge, roll):
     else:
         c = 3
     return r, c
-
-
-def phase_delay(i, n):
-    """Retardo negativo para que la figura 0 este a la vista en t=0.
-
-    Con un retardo que caiga fuera de la ventana visible de cada figura, el
-    primer fotograma sale en blanco: es lo que ve quien abre el README y lo que
-    captura cualquier miniatura.
-    """
-    return -CYCLE * ((0.12 - 1.0 / n * i) % 1.0)
 
 
 # --- contenido del panel --------------------------------------------------
@@ -178,10 +193,26 @@ def esc(s):
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def keyframes_move(n):
+    """El viaje: quieto en cada figura, y el traslado entre una y la siguiente."""
+    slot = 1.0 / n
+    out = ["@keyframes mv{"]
+    for i in range(n):
+        a, b = 100 * slot * i, 100 * (slot * i + HOLD)
+        tr = "translate(0,0)" if i == 0 else "translate(var(--p%d))" % i
+        out.append("%.4g%%,%.4g%%{transform:%s}" % (a, b, tr))
+    out.append("100%{transform:translate(0,0)}}")
+    return "".join(out)
+
+
 def build(theme):
     t = THEMES[theme]
     n = len(SHAPES)
-    slot = 100.0 / n          # porcentaje del ciclo por figura
+    rnd = random.Random(SEED)
+
+    # las cuatro figuras, emparejadas punto a punto por sector angular
+    clouds = [by_angle(sample(*fn(), N_PTS, rnd)) for _, fn in SHAPES]
+
     o = io.StringIO()
     o.write('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %d %d" width="%d" '
             'height="%d" role="img" aria-label="Juan M. Decoud - Support and AI Automation '
@@ -190,31 +221,21 @@ def build(theme):
     # --- estilos ---
     o.write('<style>')
     for i, c in enumerate(t["cols"]):
-        # fill-opacity es la base; la animacion mueve `opacity`, y se multiplican
+        # fill-opacity es la base; el titileo mueve `opacity`, y se multiplican
         o.write('.c%d{fill:%s;fill-opacity:%s}' % (i, c, OPS[i]))
-    o.write('@keyframes tw{0%,100%{opacity:.30}50%{opacity:1}}')
+    o.write(keyframes_move(n))
+    o.write('@keyframes tw{0%,100%{opacity:.35}50%{opacity:1}}')
+    # el viaje solo, y el viaje mas titileo: van juntos en una sola declaracion
+    # porque `animation` es shorthand y dos reglas sueltas se pisarian
+    o.write('.mv{animation:mv %.1fs ease-in-out infinite}' % CYCLE)
     for i in range(K_GROUPS):
-        o.write('.k%d{animation:tw %.2fs ease-in-out infinite;animation-delay:-%.2fs}'
-                % (i, 2.6 + 0.47 * i, i * 0.83))
-    # cada figura esta viva un turno: entra escalando, se sostiene, se deshace
-    o.write('@keyframes cy{0%%{opacity:0;transform:scale(.93)}'
-            '%.1f%%{opacity:1;transform:scale(1)}'
-            '%.1f%%{opacity:1;transform:scale(1)}'
-            '%.1f%%{opacity:0;transform:scale(1.06)}'
-            '100%%{opacity:0;transform:scale(.93)}}'
-            % (slot * 0.22, slot * 0.80, slot))
+        o.write('.mk%d{animation:mv %.1fs ease-in-out %.2fs infinite,'
+                'tw %.2fs ease-in-out -%.2fs infinite}'
+                % (i, CYCLE, -0.06 * i, 2.6 + 0.47 * i, i * 0.83))
+    o.write('@keyframes lbl{0%,18%{opacity:1}21%,97%{opacity:0}100%{opacity:1}}')
     for i in range(n):
-        o.write('.s%d{animation:cy %.1fs ease-in-out infinite;animation-delay:%.2fs;'
-                'transform-box:view-box;transform-origin:%dpx %dpx}'
-                % (i, CYCLE, phase_delay(i, n), CX, CY))
-    # el nombre de la figura entra y sale con ella, pero sin escalar:
-    # el scale de `cy` se resuelve contra el view-box y correria el texto
-    o.write('@keyframes cyo{0%%{opacity:0}%.1f%%{opacity:1}%.1f%%{opacity:1}'
-            '%.1f%%{opacity:0}100%%{opacity:0}}'
-            % (slot * 0.22, slot * 0.80, slot))
-    for i in range(n):
-        o.write('.n%d{animation:cyo %.1fs ease-in-out infinite;animation-delay:%.2fs}'
-                % (i, CYCLE, phase_delay(i, n)))
+        o.write('.n%d{animation:lbl %.1fs linear %.2fs infinite}'
+                % (i, CYCLE, -CYCLE * i / n))
     o.write('@keyframes sweep{from{transform:translateY(-16%)}to{transform:translateY(116%)}}')
     o.write('.sweep{animation:sweep 7s linear infinite}')
     o.write('@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}')
@@ -225,11 +246,11 @@ def build(theme):
     o.write('.dm{font-size:9px;fill:%s}' % t["dim"])
     o.write('.vl{font-size:10px;fill:%s}' % t["value"])
     o.write('.ac{font-size:9px;fill:%s}' % t["accent"])
-    # quien pidio menos movimiento ve la primera figura, quieta
-    shape_sel = ",".join(".s%d,.n%d" % (i, i) for i in range(n))
+    # quien pidio menos movimiento ve el </> quieto, con su rotulo
+    labels = ",".join(".n%d" % i for i in range(n))
     o.write('@media(prefers-reduced-motion:reduce){'
-            '[class*="k"],.live{animation:none}.sweep{display:none}'
-            '%s{animation:none;opacity:0}.s0,.n0{opacity:1}}' % shape_sel)
+            '.mv,[class*="mk"],.live{animation:none}.sweep{display:none}'
+            '%s{animation:none;opacity:0}.n0{opacity:1}}' % labels)
     o.write('</style>\n')
 
     o.write('<rect width="%d" height="%d" fill="%s"/>\n' % (W, H, t["bg"]))
@@ -242,27 +263,23 @@ def build(theme):
     for sx, sy, cx, cy in ((1, 1, m, m), (-1, 1, MAP_W - m, m),
                            (1, -1, m, BODY_H - m), (-1, -1, MAP_W - m, BODY_H - m)):
         o.write('<path class="fr" d="M%d %dV%dH%d"/>' % (cx, cy + sy * l, cy, cx + sx * l))
-    o.write('\n')
-
-    rnd = random.Random(SEED)
-    total = 0
-    counts = []
-    for i, (name, fn) in enumerate(SHAPES):
-        paths, half, n_pts = fn()
-        kept = 0
-        o.write('<g class="s%d">' % i)
-        for x, y, edge, roll in sample(paths, half, n_pts, rnd):
-            if not (m + 4 < x < MAP_W - m - 4 and m + 16 < y < BODY_H - m - 16):
-                continue
-            r, c = classify(edge, roll)
-            # el radio va como atributo: la propiedad CSS de geometria `r` no existe
-            # en renderers viejos y los circulos saldrian invisibles
-            k = ' k%d' % (int(roll * 1000) % K_GROUPS) if roll < TWINKLE else ''
-            o.write('<circle class="c%d%s" cx="%.1f" cy="%.1f" r="%s"/>' % (c, k, x, y, RADS[r]))
-            kept += 1
-        counts.append(kept)
-        total += kept
-        o.write('</g>\n')
+    o.write('\n<g>')
+    for j in range(N_PTS):
+        x, y, edge = clouds[0][j]
+        roll = rnd.random()
+        r, c = classify(edge, roll)
+        cls = 'mk%d' % (int(roll * 1000) % K_GROUPS) if roll < TWINKLE else 'mv'
+        # destinos relativos a la primera figura: si las variables no se
+        # resolvieran, el punto se queda donde esta y no salta al origen
+        # con coma: translate() la exige entre argumentos, y sin ella el
+        # transform entero es invalido y se descarta en silencio
+        dest = ";".join("--p%d:%.1fpx,%.1fpx" % (i, clouds[i][j][0] - x, clouds[i][j][1] - y)
+                        for i in range(1, len(clouds)))
+        # el radio va como atributo: la propiedad CSS de geometria `r` no existe
+        # en renderers viejos y los circulos saldrian invisibles
+        o.write('<circle class="c%d %s" cx="%.1f" cy="%.1f" r="%s" style="%s"/>'
+                % (c, cls, x, y, RADS[r], dest))
+    o.write('</g>\n')
 
     o.write('<linearGradient id="sw-%s" x1="0" y1="0" x2="0" y2="1">'
             '<stop offset="0" stop-color="%s" stop-opacity="0"/>'
@@ -277,7 +294,7 @@ def build(theme):
     # el pie nombra la figura que esta en pantalla
     for i, (name, _) in enumerate(SHAPES):
         o.write('<text class="dm n%d" x="%d" y="%d">PTS %d / %s</text>'
-                % (i, m + 26, BODY_H - m - 2, counts[i], name))
+                % (i, m + 26, BODY_H - m - 2, N_PTS, name))
     o.write('\n</g>\n')
 
     # ---------------- panel derecho: SYSTEM.INFO ----------------
@@ -310,13 +327,12 @@ def build(theme):
     o.write('<text class="dm" x="%d" y="%d" text-anchor="end">UTC-3 / BUENOS AIRES</text>\n'
             % (ix + iw, BODY_H - 13))
     o.write('</g>\n</svg>\n')
-    return o.getvalue(), total
+    return o.getvalue()
 
 
 if __name__ == "__main__":
     for theme in THEMES:
-        svg, total = build(theme)
+        svg = build(theme)
         path = "header-%s.svg" % theme
         io.open(path, "w", encoding="utf-8").write(svg)
-        print(path, len(svg) // 1024, "KB,", total, "puntos,",
-              len(SHAPES), "figuras")
+        print(path, len(svg) // 1024, "KB,", N_PTS, "puntos,", len(SHAPES), "figuras")
