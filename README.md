@@ -25,6 +25,14 @@ gracefully instead of failing loudly.
 
 ## Selected work
 
+### 🐧 [Claude Pet](https://github.com/DecoudJuan/Claude-pet) · JavaScript
+
+A desktop pet that knows what Claude Code is doing. [**Download →**](https://github.com/DecoudJuan/Claude-pet/releases/latest)
+
+It types while the agent iterates, looks up when it is thinking, and pops a speech bubble when the turn ends — so you stop switching to the terminal to check whether it finished. The expensive case is the other one: an agent stalled on a permission prompt nobody saw, and there the pet takes its hands off the keyboard and says *what* it is asking for. It learns all of this without reading the transcript, opening a port or making a single network request — Claude Code's hooks drop one JSON file per session and the window watches the directory. The drawing is a module of its own: a penguin and an otter ship with it, anyone can write theirs and pick it from the panel. Packaged for Windows, macOS and Linux.
+
+`Electron` · `Claude Code hooks` · `zero network` · `pluggable avatars` · `cross-platform installers`
+
 ### 🎸 [Guitar Learning](https://github.com/DecoudJuan/Guitar-Learning) · TypeScript
 
 A guitar class that watches you play and corrects your fretting hand, finger by finger. [**Live →**](https://guitar-learning-ten.vercel.app)
