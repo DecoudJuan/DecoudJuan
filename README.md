@@ -1,3 +1,4 @@
+<!-- repo-check: infra -->
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/header-dark.svg">
@@ -113,3 +114,13 @@ Isometric 2.5D, pixel art generated **100% in code**. No assets, no dependencies
 <p align="center">
   <sub>Open to roles and freelance · <a href="https://decoudjuan.github.io">decoudjuan.github.io</a></sub>
 </p>
+
+---
+
+## Documentos
+
+- [assets/](assets/): la card del encabezado (`header-light.svg` y `header-dark.svg`) y `gen.py`, el script de Python que las genera, para regenerarlas al cambiar el contenido.
+
+## Licencia
+
+MIT, ver [LICENSE](LICENSE).
