@@ -29,6 +29,14 @@ gracefully instead of failing loudly.
 
 ## Selected work
 
+### 🧪 meta-harness · Node.js
+
+A system that lets an AI agent improve its own harness — instructions, skills, memory, guardrails — safely. *Private repo, demo on request.*
+
+Each candidate change is tested in a sandbox against a task bank and comes out as a proposal with evidence, which a human approves; there is no path in the code to write to the real harness. It is my own reimplementation of the Propose → Probe → Compose loop from the Harness² paper, plus a blind holdout gate and an edit cap that cover what that loop leaves open: regressions and reward hacking. The controls live outside the prompt — a deny-by-default diff policy, guardrails, bank and scorer pinned by hash, an unprivileged container on an internal network whose only egress is the API through an allowlisted proxy, and token detection even when it is encoded. Built for a subscription rather than an API key: budgets are counted in sessions and turns, and a usage-limit error stops the cycle. Any harness plugs in with a `target.json`. Zero dependencies, 41 tests that run in simulated mode for free. **In development:** structure, sandbox and infrastructure are ready; the first real cycle is being prepared.
+
+`self-improving agents` · `sandboxing` · `human in the loop` · `zero dependencies` · `node:test`
+
 ### 🐧 [Claude Pet](https://github.com/DecoudJuan/Claude-pet) · JavaScript
 
 A desktop pet that knows what Claude Code is doing. [**Download →**](https://github.com/DecoudJuan/Claude-pet/releases/latest)
