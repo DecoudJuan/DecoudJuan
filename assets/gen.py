@@ -1,332 +1,176 @@
 # -*- coding: utf-8 -*-
-"""Genera la card del header del README: VISUAL.MAP + SYSTEM.INFO, en claro y oscuro.
+"""Genera el header del README: el nombre sobre la madera de DecoudJuan OS, en claro y oscuro.
 
 Todo es un unico SVG sin JS ni fuentes externas, porque GitHub sirve la imagen
-del README dentro de un <img>: ahi corren CSS y SMIL, y nada mas.
+del README dentro de un <img>: ahi corren CSS y SMIL, y nada mas. La veta es el
+mismo feTurbulence que usa el portfolio (decoudjuan.github.io), asi que pesa
+unos pocos KB y no una imagen.
 
-La VISUAL.MAP cicla cuatro figuras y los puntos VIAJAN de una a la otra: es la
-misma nube reacomodandose, no un disolvido. Cada punto lleva sus tres destinos
-en custom properties y un unico @keyframes los usa. Eso se eligio sobre SMIL
-(<animateTransform> por punto) por dos razones: pesa la mitad, y se puede apagar
-con prefers-reduced-motion, cosa que a SMIL no se le puede pedir desde CSS.
+Claro = roble, oscuro = nogal: los dos fondos del portfolio. Los detalles dorados
+(marco, filete bajo el nombre, placa de freelance y bordes del dock) usan un solo
+degrade de bronce en los dos temas.
 
-El destino se guarda como desplazamiento relativo a la primera figura, que es la
-que va en cx/cy. Si el navegador no resolviera las variables, la card se queda
-quieta en el </> en vez de amontonar todos los puntos en el origen.
+El dock muestra lo que hace (los proyectos ya estan en el README). Los iconos son
+Phosphor (duotone, MIT, https://phosphoricons.com), los mismos del portfolio, y
+Portfolio lleva el pinguino.
 """
-import io, math, random
+import io
 
-# --- lienzo ---------------------------------------------------------------
-PAD, GAP = 14, 16
-MAP_W, PANEL_W, BODY_H = 300, 404, 340
-W = PAD * 2 + MAP_W + GAP + PANEL_W
-H = PAD * 2 + BODY_H
-SEED = 7
-CX, CY = 150, 170          # centro de la VISUAL.MAP
+W, H = 748, 368
+CX = W // 2
+SANS = "ui-sans-serif,system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif"
+MONO = "ui-monospace,SFMono-Regular,'Cascadia Mono',Menlo,Consolas,monospace"
 
-# --- nube -----------------------------------------------------------------
-N_PTS = 1500               # la misma nube en todas las figuras: los puntos viajan
-CYCLE = 20.0               # segundos de vuelta completa
-HOLD = 0.18                # del ciclo, cuanto se queda quieta cada figura
-                           # (con 4 figuras el turno es 25%: 18% quieta, 7% viajando)
-TWINKLE = 0.30             # fraccion de puntos que titila
-K_GROUPS = 7               # fases de titileo, para que no lateen todos juntos
-
-RADS = [0.62, 0.95, 1.45]
-OPS = [1.0, 0.82, 0.55, 0.3]
-
-
-# --- figuras --------------------------------------------------------------
-def glyph():
-    """El </> de dev. Es la figura ancla y la que queda si algo falla."""
-    polys = [
-        [(112, 96), (56, 170), (112, 244)],   # <
-        [(128, 252), (172, 88)],              # /
-        [(188, 96), (244, 170), (188, 244)],  # >
-    ]
-    s = 1.12
-    return [[(CX + (x - CX) * s, CY + (y - CY) * s) for x, y in p] for p in polys], 8.6
-
-
-def ring():
-    """Anillo con nucleo: el estado en reposo."""
-    def circle(r, n=110):
-        return [(CX + r * math.cos(2 * math.pi * i / n),
-                 CY + r * math.sin(2 * math.pi * i / n)) for i in range(n + 1)]
-    spokes = []
-    for i in range(12):
-        a = 2 * math.pi * i / 12
-        spokes.append([(CX + 46 * math.cos(a), CY + 46 * math.sin(a)),
-                       (CX + 62 * math.cos(a), CY + 62 * math.sin(a))])
-    return [circle(96), circle(38)] + spokes, 5.0
-
-
-def grid():
-    """Reticula de nodos y aristas: la figura 'sistema'."""
-    step, n = 50, 4
-    x0 = CX - step * (n - 1) / 2
-    y0 = CY - step * (n - 1) / 2
-    paths = []
-    for i in range(n):
-        paths.append([(x0, y0 + i * step), (x0 + step * (n - 1), y0 + i * step)])
-        paths.append([(x0 + i * step, y0), (x0 + i * step, y0 + step * (n - 1))])
-    # diagonales sueltas, para que no sea una malla perfecta
-    paths.append([(x0, y0), (x0 + step * (n - 1), y0 + step * (n - 1))])
-    paths.append([(x0 + step * (n - 1), y0), (x0, y0 + step * (n - 1))])
-    return paths, 4.2
-
-
-def serpentine():
-    """La onda que le da el nombre a FS/SERPENTINE."""
-    paths = []
-    for k, amp in ((0, 64), (1, 40)):
-        pts = []
-        for i in range(161):
-            t = i / 160
-            paths_x = CX - 115 + 230 * t
-            pts.append((paths_x, CY + amp * math.sin(2 * math.pi * 1.5 * t + k * math.pi / 2)))
-        paths.append(pts)
-    return paths, 5.5
-
-
-SHAPES = [("GLYPH-CLOUD", glyph), ("ORBIT", ring),
-          ("LATTICE", grid), ("SERPENTINE", serpentine)]
-
-
-# --- muestreo -------------------------------------------------------------
-def sample(paths, half, n_pts, rnd):
-    """Exactamente n_pts sobre las polilineas, con grosor y jitter.
-
-    Devuelve (x, y, borde 0..1). El borde solo se usa en la primera figura,
-    para pintar: el color de un punto no cambia cuando viaja.
-    """
-    segs = []
-    for poly in paths:
-        for a, b in zip(poly, poly[1:]):
-            L = math.hypot(b[0] - a[0], b[1] - a[1])
-            if L > 0.01:
-                segs.append((a, b, L))
-    total = sum(s[2] for s in segs)
-
-    pts = []
-    while len(pts) < n_pts:
-        for a, b, L in segs:
-            dx, dy = (b[0] - a[0]) / L, (b[1] - a[1]) / L
-            px, py = -dy, dx                               # perpendicular unitaria
-            for _ in range(max(1, int(round(n_pts * L / total)))):
-                if len(pts) >= n_pts:
-                    break
-                t = rnd.random() * L
-                if rnd.random() < 0.10:                    # los que se escapan
-                    off = math.copysign(half * (1.1 + rnd.random() * 1.5), rnd.random() - 0.5)
-                else:
-                    # potencia < 1 aplana el centro: densidad pareja a lo ancho
-                    off = math.copysign(half * rnd.random() ** 0.72, rnd.random() - 0.5)
-                jit = rnd.gauss(0, 1.6)                    # jitter sobre el eje
-                x = a[0] + dx * t + px * off + dx * jit
-                y = a[1] + dy * t + py * off + dy * jit
-                # recortar aca y no al escribir: las cuatro figuras tienen que
-                # terminar con la misma cantidad de puntos para poder emparejarse
-                x = min(max(x, 20.0), MAP_W - 20.0)
-                y = min(max(y, 32.0), BODY_H - 32.0)
-                pts.append((x, y, min(1.0, abs(off) / (half * 1.25))))
-    return pts[:n_pts]
-
-
-def by_angle(pts):
-    """Ordena por angulo alrededor del centro.
-
-    Es lo que empareja un punto de una figura con el de la siguiente: al viajar
-    cada uno se queda en su sector, la nube gira y se reacomoda en vez de
-    cruzarse en diagonal contra si misma.
-    """
-    return sorted(pts, key=lambda p: (math.atan2(p[1] - CY, p[0] - CX),
-                                      math.hypot(p[0] - CX, p[1] - CY)))
-
-
-def classify(edge, roll):
-    r = 2 if roll < 0.05 else (1 if roll < 0.26 else 0)
-    # el dorado es minoria y vive en el centro; el resto es azul que se apaga
-    if edge < 0.30 and roll < 0.34:
-        c = 0
-    elif edge < 0.55:
-        c = 1
-    elif edge < 0.80:
-        c = 2
-    else:
-        c = 3
-    return r, c
-
-
-# --- contenido del panel --------------------------------------------------
-ROWS = [
-    ("Subject",       "Juan M. Decoud"),
-    ("Role",          "Support & AI Automation Eng."),
-    ("Origin",        "Buenos Aires, AR"),
-    ("Education",     "Computer Eng. / U. Austral"),
-    ("Status",        "Building / Shipping"),
-    (None, None),
-    ("Core.Lang",     "Python / TypeScript / Rust"),
-    ("Core.Web",      "React / NestJS / PySide6"),
-    ("Core.Data",     "PostgreSQL / SQLite / Prisma"),
-    ("Core.Infra",    "Azure / Docker / Actions"),
-    ("Core.Auto",     "n8n / Zapier / HubSpot"),
-    (None, None),
-    ("Grid.Site",     "decoudjuan.github.io"),
-    ("Grid.LinkedIn", "/in/decoudjuan"),
-    ("Grid.GitHub",   "DecoudJuan"),
-]
+NAME = "Juan Manuel Decoud"
+ROLE = "Support & AI Automation Engineer at Darwin AI · Computer Engineering, Universidad Austral"
+WHERE = "BUENOS AIRES · UTC-3"
+FREELANCE = "OPEN TO FREELANCE"
 
 THEMES = {
-    "dark":  dict(bg="#0f1319", card="#11151c", frame="#2c3646", label="#5d6b80",
-                  dim="#39465a", value="#c6d0de", accent="#e6c46a", scan="#4a6fa5",
-                  live="#5ea87a", cols=["#e6c46a", "#8fb0de", "#5e82b8", "#3f5a85"]),
-    "light": dict(bg="#ffffff", card="#f6f7f9", frame="#c8cfda", label="#7b8698",
-                  dim="#aab3c0", value="#2b3340", accent="#a8801f", scan="#7d97bd",
-                  live="#2f7a4f", cols=["#a8801f", "#3f6aa8", "#6d8cb6", "#9aabc4"]),
+    "light": dict(wood="#d6bc93", grain=0.2, vignette=0.22, ink="#1e1914", mut="#4f4232",
+                  bar="#fbf8f2", bar_op=0.72, bar_ln="#c9b28c", tile="#fbf8f2",
+                  tones=["#2f5d46", "#8a3324", "#a06a12", "#3a2c24"], plate_ink="#2e2008", live="#2f7a4f",
+                  line="#94722a", frame_op=0.9),
+    "dark": dict(wood="#3a2618", grain=0.45, vignette=0.45, ink="#f3e9dc", mut="#cdbba2",
+                 bar="#1c1510", bar_op=0.6, bar_ln="#5a4430", tile="#3d332b",
+                 tones=["#8cc4a2", "#e58f78", "#e9b65a", "#e6d8c2"], plate_ink="#2e2008", live="#2f7a4f",
+                 line="#e3c77d", frame_op=0.75),
 }
 
-MONO = "ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
+# Phosphor duotone (viewBox 256): [(d, opacidad o None), ...]
+ICONS = {
+    "Robot": [('M200,56H56A24,24,0,0,0,32,80V192a24,24,0,0,0,24,24H200a24,24,0,0,0,24-24V80A24,24,0,0,0,200,56ZM164,184H92a20,20,0,0,1,0-40h72a20,20,0,0,1,0,40Z', '0.2'), ('M200,48H136V16a8,8,0,0,0-16,0V48H56A32,32,0,0,0,24,80V192a32,32,0,0,0,32,32H200a32,32,0,0,0,32-32V80A32,32,0,0,0,200,48Zm16,144a16,16,0,0,1-16,16H56a16,16,0,0,1-16-16V80A16,16,0,0,1,56,64H200a16,16,0,0,1,16,16ZM72,108a12,12,0,1,1,12,12A12,12,0,0,1,72,108Zm88,0a12,12,0,1,1,12,12A12,12,0,0,1,160,108Zm4,28H92a28,28,0,0,0,0,56h72a28,28,0,0,0,0-56Zm-24,16v24H116V152ZM80,164a12,12,0,0,1,12-12h8v24H92A12,12,0,0,1,80,164Zm84,12h-8V152h8a12,12,0,0,1,0,24Z', None)],
+    "PlugsConnected": [('M185,127,127,185a24,24,0,0,1-33.94,0L71,162.91A24,24,0,0,1,71,129L129,71a24,24,0,0,1,33.94,0L185,93.09A24,24,0,0,1,185,127Z', '0.2'), ('M237.66,18.34a8,8,0,0,0-11.32,0l-52.4,52.41-5.37-5.38a32.05,32.05,0,0,0-45.26,0L100,88.69l-6.34-6.35A8,8,0,0,0,82.34,93.66L88.69,100,65.37,123.31a32,32,0,0,0,0,45.26l5.38,5.37-52.41,52.4a8,8,0,0,0,11.32,11.32l52.4-52.41,5.37,5.38a32.06,32.06,0,0,0,45.26,0L156,167.31l6.34,6.35a8,8,0,0,0,11.32-11.32L167.31,156l23.32-23.31a32,32,0,0,0,0-45.26l-5.38-5.37,52.41-52.4A8,8,0,0,0,237.66,18.34Zm-116.29,161a16,16,0,0,1-22.62,0L76.69,157.25a16,16,0,0,1,0-22.62L100,111.31,144.69,156Zm57.94-57.94h0L156,144.69,111.31,100l23.32-23.31a16,16,0,0,1,22.62,0l22.06,22a16,16,0,0,1,0,22.63ZM88.57,35A8,8,0,0,1,103.43,29l8,20A8,8,0,0,1,96.57,55ZM24.57,93A8,8,0,0,1,35,88.57l20,8A8,8,0,0,1,49,111.43l-20-8A8,8,0,0,1,24.57,93ZM231.43,163a8,8,0,0,1-10.4,4.46l-20-8A8,8,0,1,1,207,144.57l20,8A8,8,0,0,1,231.43,163Zm-64,58.06A8,8,0,0,1,152.57,227l-8-20A8,8,0,0,1,159.43,201Z', None)],
+    "Code": [('M240,128l-48,40H64L16,128,64,88H192Z', '0.2'), ('M69.12,94.15,28.5,128l40.62,33.85a8,8,0,1,1-10.24,12.29l-48-40a8,8,0,0,1,0-12.29l48-40a8,8,0,0,1,10.24,12.3Zm176,27.7-48-40a8,8,0,1,0-10.24,12.3L227.5,128l-40.62,33.85a8,8,0,1,0,10.24,12.29l48-40a8,8,0,0,0,0-12.29ZM162.73,32.48a8,8,0,0,0-10.25,4.79l-64,176a8,8,0,0,0,4.79,10.26A8.14,8.14,0,0,0,96,224a8,8,0,0,0,7.52-5.27l64-176A8,8,0,0,0,162.73,32.48Z', None)],
+    "Headset": [('M80,144v40a16,16,0,0,1-16,16H48a16,16,0,0,1-16-16V128H64A16,16,0,0,1,80,144Zm112-16a16,16,0,0,0-16,16v40a16,16,0,0,0,16,16h32V128Z', '0.2'), ('M201.89,54.66A104.08,104.08,0,0,0,24,128v56a24,24,0,0,0,24,24H64a24,24,0,0,0,24-24V144a24,24,0,0,0-24-24H40.36A88.12,88.12,0,0,1,190.54,65.93,87.39,87.39,0,0,1,215.65,120H192a24,24,0,0,0-24,24v40a24,24,0,0,0,24,24h24a24,24,0,0,1-24,24H136a8,8,0,0,0,0,16h56a40,40,0,0,0,40-40V128A103.41,103.41,0,0,0,201.89,54.66ZM64,136a8,8,0,0,1,8,8v40a8,8,0,0,1-8,8H48a8,8,0,0,1-8-8V136Zm128,56a8,8,0,0,1-8-8V144a8,8,0,0,1,8-8h24v56Z', None)],
+}
+
+# lo que hace, no los proyectos (esos van abajo en el README): etiqueta, icono, tono
+DOCK = [
+    ("Portfolio", None, None),          # el pinguino de DecoudJuan OS
+    ("AI Automation", "Robot", 2),
+    ("Integrations", "PlugsConnected", 0),
+    ("Full-Stack", "Code", 1),
+    ("Tech Support L2", "Headset", 3),
+]
+TILE, STEP = 50, 116
+DOCK_Y = 250
+
+# el pinguino del portfolio (viewBox 240), sin animacion
+PENGUIN = """
+<clipPath id="pmc"><rect width="240" height="240"/></clipPath>
+<g clip-path="url(#pmc)"><path fill="#1e2228" d="M0.3 262C-1.6 198 44 162 120 162C196 162 241.6 198 239.7 262Z"/><path fill="#fff" d="M64.9 262C63 214 93.4 196 120 196C146.6 196 177 214 175.1 262Z"/></g>
+<path fill="#1e2228" d="M120 30C66 30 28 64 28 116C28 158 62 186 120 186C178 186 212 158 212 116C212 64 174 30 120 30Z"/>
+<path fill="#fff" d="M31 124C31 86 50 70 76 70C100 70 112 88 114 108C116 115 124 115 126 108C128 88 140 70 164 70C190 70 209 86 209 124C209 162 172 184 120 184C68 184 31 162 31 124Z"/>
+<ellipse fill="#1e2228" cx="76" cy="107" rx="11" ry="13"/><ellipse fill="#1e2228" cx="164" cy="107" rx="11" ry="13"/>
+<ellipse fill="#fff" cx="71.2" cy="101" rx="3.6" ry="5"/><ellipse fill="#fff" cx="159.2" cy="101" rx="3.6" ry="5"/>
+<path fill="#f0951f" stroke="#1e2228" stroke-width="3.5" d="M99 120C101 111 110 107 120 107C130 107 139 111 141 120C141 132 132 150 120 157C108 150 99 132 99 120Z"/>
+<path fill="none" stroke="#1e2228" stroke-width="23" stroke-linecap="round" d="M30 106C30 -10 210 -10 210 106"/>
+<path fill="none" stroke="#f1f3f5" stroke-width="15" stroke-linecap="round" d="M30 106C30 -10 210 -10 210 106"/>
+<rect fill="#f1f3f5" stroke="#1e2228" stroke-width="5" x="13" y="84" width="37" height="68" rx="18"/>
+<rect fill="#f1f3f5" stroke="#1e2228" stroke-width="5" x="190" y="84" width="37" height="68" rx="18"/>
+<g fill="none" stroke="#000" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"><path d="M26 88C26 78 32 74 48 74L100 74C110 74 114 80 114 91C114 106 112 120 108 127C104 134 92 137 72 137C50 137 36 134 31 126C27 119 26 97 26 88Z"/><path d="M214 88C214 78 208 74 192 74L140 74C130 74 126 80 126 91C126 106 128 120 132 127C136 134 148 137 168 137C190 137 204 134 209 126C213 119 214 97 214 88Z"/><path d="M114 85C117 81 123 81 126 85"/></g>
+"""
 
 
 def esc(s):
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def keyframes_move(n):
-    """El viaje: quieto en cada figura, y el traslado entre una y la siguiente."""
-    slot = 1.0 / n
-    out = ["@keyframes mv{"]
-    for i in range(n):
-        a, b = 100 * slot * i, 100 * (slot * i + HOLD)
-        tr = "translate(0,0)" if i == 0 else "translate(var(--p%d))" % i
-        out.append("%.4g%%,%.4g%%{transform:%s}" % (a, b, tr))
-    out.append("100%{transform:translate(0,0)}}")
-    return "".join(out)
-
-
 def build(theme):
     t = THEMES[theme]
-    n = len(SHAPES)
-    rnd = random.Random(SEED)
-
-    # las cuatro figuras, emparejadas punto a punto por sector angular
-    clouds = [by_angle(sample(*fn(), N_PTS, rnd)) for _, fn in SHAPES]
-
     o = io.StringIO()
-    o.write('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %d %d" width="%d" '
-            'height="%d" role="img" aria-label="Juan M. Decoud - Support and AI Automation '
-            'Engineer, Buenos Aires. Python, TypeScript, Rust.">\n' % (W, H, W, H))
+    o.write('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %d %d" width="%d" height="%d" role="img" '
+            'aria-label="Juan Manuel Decoud. Support and AI Automation Engineer at Darwin AI, Universidad Austral, '
+            'Buenos Aires. Open to freelance.">\n' % (W, H, W, H))
 
     # --- estilos ---
     o.write('<style>')
-    for i, c in enumerate(t["cols"]):
-        # fill-opacity es la base; el titileo mueve `opacity`, y se multiplican
-        o.write('.c%d{fill:%s;fill-opacity:%s}' % (i, c, OPS[i]))
-    o.write(keyframes_move(n))
-    o.write('@keyframes tw{0%,100%{opacity:.35}50%{opacity:1}}')
-    # el viaje solo, y el viaje mas titileo: van juntos en una sola declaracion
-    # porque `animation` es shorthand y dos reglas sueltas se pisarian
-    o.write('.mv{animation:mv %.1fs ease-in-out infinite}' % CYCLE)
-    for i in range(K_GROUPS):
-        o.write('.mk%d{animation:mv %.1fs ease-in-out %.2fs infinite,'
-                'tw %.2fs ease-in-out -%.2fs infinite}'
-                % (i, CYCLE, -0.06 * i, 2.6 + 0.47 * i, i * 0.83))
-    o.write('@keyframes lbl{0%,18%{opacity:1}21%,97%{opacity:0}100%{opacity:1}}')
-    for i in range(n):
-        o.write('.n%d{animation:lbl %.1fs linear %.2fs infinite}'
-                % (i, CYCLE, -CYCLE * i / n))
-    o.write('@keyframes sweep{from{transform:translateY(-16%)}to{transform:translateY(116%)}}')
-    o.write('.sweep{animation:sweep 7s linear infinite}')
-    o.write('@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}')
-    o.write('.live{animation:blink 2s ease-in-out infinite}')
-    o.write('.fr{fill:none;stroke:%s;stroke-width:1.1}' % t["frame"])
-    o.write('text{font-family:%s;letter-spacing:.9px}' % MONO)
-    o.write('.lb{font-size:9px;fill:%s}' % t["label"])
-    o.write('.dm{font-size:9px;fill:%s}' % t["dim"])
-    o.write('.vl{font-size:10px;fill:%s}' % t["value"])
-    o.write('.ac{font-size:9px;fill:%s}' % t["accent"])
-    # quien pidio menos movimiento ve el </> quieto, con su rotulo
-    labels = ",".join(".n%d" % i for i in range(n))
-    o.write('@media(prefers-reduced-motion:reduce){'
-            '.mv,[class*="mk"],.live{animation:none}.sweep{display:none}'
-            '%s{animation:none;opacity:0}.n0{opacity:1}}' % labels)
+    o.write('text{font-family:%s}.mono{font-family:%s;letter-spacing:1.6px}' % (SANS, MONO))
+    o.write('.ink{fill:%s}.mut{fill:%s}' % (t["ink"], t["mut"]))
+    o.write('@keyframes rise{from{opacity:0;transform:translateY(8px)}}')
+    o.write('@keyframes draw{from{transform:scaleX(0)}}')
+    o.write('@keyframes pop{from{opacity:0;transform:translateY(12px) scale(.9)}}')
+    o.write('@keyframes live{0%,100%{opacity:1}50%{opacity:.35}}')
+    o.write('.r{animation:rise .6s cubic-bezier(.22,1,.36,1) backwards}')
+    o.write('.d1{animation-delay:.08s}.d2{animation-delay:.16s}.d3{animation-delay:.26s}')
+    o.write('.rule{transform-box:fill-box;transform-origin:center;animation:draw .8s cubic-bezier(.22,1,.36,1) .2s backwards}')
+    o.write('.dk{transform-box:fill-box;transform-origin:50% 100%;animation:pop .5s cubic-bezier(.34,1.56,.64,1) backwards}')
+    for i in range(len(DOCK)):
+        o.write('.k%d{animation-delay:%.2fs}' % (i, 0.4 + 0.06 * i))
+    o.write('.live{animation:live 2.4s ease-in-out infinite}')
+    o.write('@media(prefers-reduced-motion:reduce){.r,.rule,.dk,.live{animation:none}}')
     o.write('</style>\n')
 
-    o.write('<rect width="%d" height="%d" fill="%s"/>\n' % (W, H, t["bg"]))
+    # --- defs: veta, vineta y bronce ---
+    o.write('<defs>'
+            '<filter id="g" x="0" y="0" width="100%%" height="100%%"><feTurbulence type="fractalNoise" '
+            'baseFrequency="0.0042857 0.11" numOctaves="4" seed="11" stitchTiles="stitch"/>'
+            '<feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1.6 0 0 0 -0.62"/></filter>'
+            '<radialGradient id="vg" cx="50%%" cy="42%%" r="75%%"><stop offset=".45" stop-color="#000" stop-opacity="0"/>'
+            '<stop offset="1" stop-color="#000" stop-opacity="%s"/></radialGradient>'
+            '<linearGradient id="gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ecd48c"/>'
+            '<stop offset=".5" stop-color="#c9a24f"/><stop offset="1" stop-color="#94722a"/></linearGradient>'
+            '<linearGradient id="goldh" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#c9a24f" stop-opacity="0"/>'
+            '<stop offset=".5" stop-color="%s"/><stop offset="1" stop-color="#c9a24f" stop-opacity="0"/></linearGradient>'
+            '<clipPath id="card"><rect width="%d" height="%d" rx="14"/></clipPath>'
+            '</defs>\n' % (t["vignette"], t["line"], W, H))
 
-    # ---------------- panel izquierdo: VISUAL.MAP ----------------
-    o.write('<g transform="translate(%d,%d)">\n' % (PAD, PAD))
-    o.write('<rect width="%d" height="%d" rx="6" fill="%s" stroke="%s" stroke-width="1"/>\n'
-            % (MAP_W, BODY_H, t["card"], t["frame"]))
-    m, l = 13, 19
-    for sx, sy, cx, cy in ((1, 1, m, m), (-1, 1, MAP_W - m, m),
-                           (1, -1, m, BODY_H - m), (-1, -1, MAP_W - m, BODY_H - m)):
-        o.write('<path class="fr" d="M%d %dV%dH%d"/>' % (cx, cy + sy * l, cy, cx + sx * l))
-    o.write('\n<g>')
-    for j in range(N_PTS):
-        x, y, edge = clouds[0][j]
-        roll = rnd.random()
-        r, c = classify(edge, roll)
-        cls = 'mk%d' % (int(roll * 1000) % K_GROUPS) if roll < TWINKLE else 'mv'
-        # destinos relativos a la primera figura: si las variables no se
-        # resolvieran, el punto se queda donde esta y no salta al origen
-        # con coma: translate() la exige entre argumentos, y sin ella el
-        # transform entero es invalido y se descarta en silencio
-        dest = ";".join("--p%d:%.1fpx,%.1fpx" % (i, clouds[i][j][0] - x, clouds[i][j][1] - y)
-                        for i in range(1, len(clouds)))
-        # el radio va como atributo: la propiedad CSS de geometria `r` no existe
-        # en renderers viejos y los circulos saldrian invisibles
-        o.write('<circle class="c%d %s" cx="%.1f" cy="%.1f" r="%s" style="%s"/>'
-                % (c, cls, x, y, RADS[r], dest))
+    # --- madera ---
+    o.write('<g clip-path="url(#card)">')
+    o.write('<rect width="%d" height="%d" fill="%s"/>' % (W, H, t["wood"]))
+    o.write('<rect width="%d" height="%d" filter="url(#g)" opacity="%s"/>' % (W, H, t["grain"]))
+    o.write('<rect width="%d" height="%d" fill="url(#vg)"/>' % (W, H))
     o.write('</g>\n')
+    # marco dorado fino, adentro del borde
+    o.write('<rect x="10.5" y="10.5" width="%d" height="%d" rx="9" fill="none" stroke="url(#gold)" '
+            'stroke-opacity="%s"/>\n' % (W - 21, H - 21, t["frame_op"]))
 
-    o.write('<linearGradient id="sw-%s" x1="0" y1="0" x2="0" y2="1">'
-            '<stop offset="0" stop-color="%s" stop-opacity="0"/>'
-            '<stop offset=".5" stop-color="%s" stop-opacity=".5"/>'
-            '<stop offset="1" stop-color="%s" stop-opacity="0"/></linearGradient>\n'
-            % (theme, t["scan"], t["scan"], t["scan"]))
-    o.write('<rect class="sweep" x="%d" y="0" width="%d" height="46" fill="url(#sw-%s)"/>\n'
-            % (m + 4, MAP_W - 2 * m - 8, theme))
-    o.write('<text class="lb" x="%d" y="%d">VISUAL.MAP</text>' % (m + 26, m + 2))
-    o.write('<text class="dm" x="%d" y="%d" text-anchor="end">%dx%d / 1-BIT</text>'
-            % (MAP_W - m - 26, m + 2, MAP_W, BODY_H))
-    # el pie nombra la figura que esta en pantalla
-    for i, (name, _) in enumerate(SHAPES):
-        o.write('<text class="dm n%d" x="%d" y="%d">PTS %d / %s</text>'
-                % (i, m + 26, BODY_H - m - 2, N_PTS, name))
-    o.write('\n</g>\n')
+    # --- texto ---
+    o.write('<g class="r"><text class="mono mut" x="%d" y="60" font-size="11" text-anchor="middle">%s</text></g>\n'
+            % (CX, esc(WHERE)))
+    o.write('<g class="r d1"><text class="ink" x="%d" y="122" font-size="56" font-weight="800" letter-spacing="-1.6" '
+            'text-anchor="middle">%s</text></g>\n' % (CX, esc(NAME)))
+    o.write('<rect class="rule" x="%d" y="138" width="180" height="2" fill="url(#goldh)"/>\n' % (CX - 90))
+    o.write('<g class="r d2"><text class="ink" x="%d" y="170" font-size="15.5" font-weight="500" '
+            'text-anchor="middle">%s</text></g>\n' % (CX, esc(ROLE)))
 
-    # ---------------- panel derecho: SYSTEM.INFO ----------------
-    o.write('<g transform="translate(%d,%d)">\n' % (PAD + MAP_W + GAP, PAD))
-    o.write('<rect width="%d" height="%d" rx="6" fill="%s" stroke="%s" stroke-width="1"/>\n'
-            % (PANEL_W, BODY_H, t["card"], t["frame"]))
-    ix, iw = 18, PANEL_W - 36
-    o.write('<text class="lb" x="%d" y="26">SYSTEM.INFO</text>' % ix)
-    # @DecoudJuan mide ~70px en 9px mono; el badge arranca bien a su izquierda
-    o.write('<circle class="live" cx="%d" cy="22" r="3" fill="%s"/>' % (ix + iw - 118, t["live"]))
-    o.write('<text class="dm" x="%d" y="26">LIVE</text>' % (ix + iw - 108))
-    o.write('<text class="ac" x="%d" y="26" text-anchor="end">@DecoudJuan</text>\n' % (ix + iw))
-    o.write('<line x1="%d" y1="36" x2="%d" y2="36" stroke="%s"/>\n' % (ix, ix + iw, t["frame"]))
+    # placa de bronce: abierto a freelance
+    pw = 178
+    o.write('<g class="r d3"><rect x="%d" y="188" width="%d" height="28" rx="14" fill="url(#gold)" stroke="#8a6a24"/>'
+            '<circle class="live" cx="%d" cy="202" r="3.6" fill="%s"/>'
+            '<text class="mono" x="%d" y="206" font-size="10.5" font-weight="700" fill="%s">%s</text></g>\n'
+            % (CX - pw // 2, pw, CX - pw // 2 + 18, t["live"], CX - pw // 2 + 30, t["plate_ink"], FREELANCE))
 
-    y = 56
-    for label, value in ROWS:
-        if label is None:
-            y += 9
-            continue
-        o.write('<text class="lb" x="%d" y="%d">%s</text>' % (ix, y, esc(label)))
-        o.write('<text class="vl" x="%d" y="%d" text-anchor="end">%s</text>\n'
-                % (ix + iw, y, esc(value)))
-        y += 19
+    # --- dock ---
+    n = len(DOCK)
+    dw = STEP * (n - 1) + TILE + 44
+    dx = CX - dw // 2
+    o.write('<rect x="%d" y="%d" width="%d" height="%d" rx="22" fill="%s" fill-opacity="%s" stroke="%s"/>\n'
+            % (dx, DOCK_Y - 12, dw, TILE + 46, t["bar"], t["bar_op"], t["bar_ln"]))
+    x0 = CX - (STEP * (n - 1)) // 2 - TILE // 2
+    for i, (label, icon, tone) in enumerate(DOCK):
+        x = x0 + i * STEP
+        o.write('<g class="dk k%d">' % i)
+        if icon is None:
+            o.write('<rect x="%d" y="%d" width="%d" height="%d" rx="12" fill="#e7b866" stroke="url(#gold)"/>'
+                    % (x, DOCK_Y, TILE, TILE))
+            o.write('<svg x="%d" y="%d" width="%d" height="%d" viewBox="0 0 240 240">%s</svg>'
+                    % (x + 5, DOCK_Y + 6, TILE - 10, TILE - 10, PENGUIN))
+        else:
+            col = t["tones"][tone]
+            o.write('<rect x="%d" y="%d" width="%d" height="%d" rx="12" fill="%s" stroke="url(#gold)"/>'
+                    % (x, DOCK_Y, TILE, TILE, t["tile"]))
+            s = (TILE - 18) / 256
+            o.write('<g transform="translate(%.1f %.1f) scale(%.4f)" fill="%s">' % (x + 9, DOCK_Y + 9, s, col))
+            for d, op in ICONS[icon]:
+                o.write('<path d="%s"%s/>' % (d, ' opacity="%s"' % op if op else ''))
+            o.write('</g>')
+        o.write('<text class="mut" x="%d" y="%d" font-size="11" font-weight="500" text-anchor="middle">%s</text>'
+                % (x + TILE // 2, DOCK_Y + TILE + 18, esc(label)))
+        o.write('</g>\n')
 
-    o.write('<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="%s"/>\n'
-            % (ix, BODY_H - 30, ix + iw, BODY_H - 30, t["frame"]))
-    o.write('<circle class="live" cx="%d" cy="%d" r="3" fill="%s"/>'
-            % (ix + 4, BODY_H - 17, t["live"]))
-    o.write('<text class="dm" x="%d" y="%d">ALL SYSTEMS NOMINAL</text>' % (ix + 14, BODY_H - 13))
-    o.write('<text class="dm" x="%d" y="%d" text-anchor="end">UTC-3 / BUENOS AIRES</text>\n'
-            % (ix + iw, BODY_H - 13))
-    o.write('</g>\n</svg>\n')
+    o.write('</svg>\n')
     return o.getvalue()
 
 
@@ -335,4 +179,4 @@ if __name__ == "__main__":
         svg = build(theme)
         path = "header-%s.svg" % theme
         io.open(path, "w", encoding="utf-8").write(svg)
-        print(path, len(svg) // 1024, "KB,", N_PTS, "puntos,", len(SHAPES), "figuras")
+        print(path, round(len(svg.encode("utf-8")) / 1024, 1), "KB")
