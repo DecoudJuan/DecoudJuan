@@ -1,29 +1,20 @@
 <!-- repo-check: infra -->
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/header-dark.svg">
-    <img src="assets/header-light.svg" width="762" alt="Juan M. Decoud — Support &amp; AI Automation Engineer, Buenos Aires. Python, TypeScript, Rust.">
-  </picture>
+  <a href="https://decoudjuan.github.io">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="assets/header-dark.svg">
+      <img src="assets/header-light.svg" width="748" alt="Juan Manuel Decoud. Support &amp; AI Automation Engineer at Darwin AI, Universidad Austral, Buenos Aires. Open to freelance.">
+    </picture>
+  </a>
 </p>
-
-<h1 align="center">Juan Manuel Decoud</h1>
 
 <p align="center">
-  <a href="https://decoudjuan.github.io"><img src="https://img.shields.io/badge/Portfolio-decoudjuan.github.io-10131a?style=flat-square" alt="Portfolio"></a>
   <a href="https://www.linkedin.com/in/decoudjuan/"><img src="https://img.shields.io/badge/LinkedIn-connect-0a66c2?style=flat-square" alt="LinkedIn"></a>
-  <img src="https://img.shields.io/badge/Buenos_Aires-AR-6b7280?style=flat-square" alt="Buenos Aires, Argentina">
 </p>
 
----
+I connect the tools a business already runs on — CRMs, automations and AI agents — and build them to keep working when something upstream fails.
 
-I build the unglamorous half of software: the integrations, the fallbacks and
-the checks that decide whether a workflow still runs at 3 a.m. on a Tuesday.
-
-Day to day that is n8n and Zapier pipelines against HubSpot, Salesforce and
-Pipedrive at my job. On my own time it is shipped products — a Rust
-security scanner, a precision-first playlist migrator, a desktop app that
-replaced a legacy Access system in a real business — built to degrade
-gracefully instead of failing loudly.
+Day to day that is n8n and Zapier pipelines against HubSpot, Salesforce and Pipedrive. On my own time it is shipped products, built to degrade gracefully instead of failing loudly.
 
 ---
 
@@ -31,71 +22,55 @@ gracefully instead of failing loudly.
 
 ### 🧪 meta-harness · Node.js
 
-A system that lets an AI agent improve its own harness — instructions, skills, memory, guardrails — safely. *Private repo, demo on request.*
+An AI agent that improves its own harness (instructions, skills, memory, guardrails) safely. Every change is tested in a sandbox against a task bank, with a blind holdout against reward hacking, and reaches the real harness only after a human approves it. *In development; private repo, demo on request.*
 
-Each candidate change is tested in a sandbox against a task bank and comes out as a proposal with evidence, which a human approves; there is no path in the code to write to the real harness. It is my own reimplementation of the Propose → Probe → Compose loop from the Harness² paper, plus a blind holdout gate and an edit cap that cover what that loop leaves open: regressions and reward hacking. The controls live outside the prompt — a deny-by-default diff policy, guardrails, bank and scorer pinned by hash, an unprivileged container on an internal network whose only egress is the API through an allowlisted proxy, and token detection even when it is encoded. Built for a subscription rather than an API key: budgets are counted in sessions and turns, and a usage-limit error stops the cycle. Any harness plugs in with a `target.json`. Zero dependencies, 41 tests that run in simulated mode for free. **In development:** structure, sandbox and infrastructure are ready; the first real cycle is being prepared.
-
-`self-improving agents` · `sandboxing` · `human in the loop` · `zero dependencies` · `node:test`
+`self-improving agents` · `sandboxing` · `human in the loop` · `zero dependencies`
 
 ### 🐧 [Claude Pet](https://github.com/DecoudJuan/Claude-pet) · JavaScript
 
-A desktop pet that knows what Claude Code is doing. [**Download →**](https://github.com/DecoudJuan/Claude-pet/releases/latest)
+A desktop pet that shows what Claude Code is doing, and says what it is waiting for when it stalls on a permission prompt. No network and no transcript reading: it watches the JSON files that Claude Code's hooks write. [**Download →**](https://github.com/DecoudJuan/Claude-pet/releases/latest)
 
-It types while the agent iterates, looks up when it is thinking, and pops a speech bubble when the turn ends — so you stop switching to the terminal to check whether it finished. The expensive case is the other one: an agent stalled on a permission prompt nobody saw, and there the pet takes its hands off the keyboard and says *what* it is asking for. It learns all of this without reading the transcript, opening a port or making a single network request — Claude Code's hooks drop one JSON file per session and the window watches the directory. The drawing is a module of its own: a penguin and an otter ship with it, anyone can write theirs and pick it from the panel. Packaged for Windows, macOS and Linux.
-
-`Electron` · `Claude Code hooks` · `zero network` · `pluggable avatars` · `cross-platform installers`
+`Electron` · `Claude Code hooks` · `zero network` · `cross-platform`
 
 ### 🎸 [Guitar Learning](https://github.com/DecoudJuan/Guitar-Learning) · TypeScript
 
-A guitar class that watches you play and corrects your fretting hand, finger by finger. [**Live →**](https://guitar-learning-ten.vercel.app)
+A guitar class that watches you play through the camera and corrects your fretting hand finger by finger. Runs entirely in the browser. [**Live →**](https://guitar-learning-ten.vercel.app)
 
-It makes no sound — the sound is your guitar. You mark the four corners of the fretboard once, and a four-point homography turns any pixel into a (string, fret) position; the same maths used the other way, as registration against the frame you calibrated in, keeps the grid on the neck as the guitar shifts in your lap. MediaPipe puts the hand on top of that, and the verdict is **per finger, never per chord** — "wrong" teaches nobody anything, so what shows on screen is one arrow from where a finger is to where it goes. Everything runs in the browser: no backend, one runtime dependency, and a single network request, enforced by CSP rather than promised.
-
-`computer vision` · `homography` · `MediaPipe` · `zero backend` · `Vite + TS`
+`computer vision` · `homography` · `MediaPipe` · `zero backend`
 
 ### 🎵 [Migratify](https://github.com/DecoudJuan/Migratify) · Python
 
-Migrates playlists between Spotify and YouTube Music, in both directions, **without adding the wrong song.** [**Site →**](https://decoudjuan.github.io/Migratify/)
+Migrates playlists between Spotify and YouTube Music without adding the wrong song: it scores every candidate, vetoes wrong artists and versions, and asks when it cannot tell two apart. [**Site →**](https://decoudjuan.github.io/Migratify/)
 
-The same title exists as a cover, a karaoke track, a live take, a remix and as a completely different song by a completely different artist. Most migrators take the first search result and hand you a playlist that is quietly 15% wrong. Migratify scores candidates on artist, title, duration, album and result type, hard-vetoes wrong-artist and wrong-version matches, and when it still cannot tell two candidates apart it **asks instead of guessing**. Nothing is written until you run `apply`.
-
-`weighted scoring` · `hard vetoes` · `review queue` · `SQLite cache` · `bidirectional`
+`weighted scoring` · `review queue` · `SQLite cache` · `bidirectional`
 
 ### 🐝 [Wasp](https://github.com/DecoudJuan/Wasp) · Rust
 
-An OWASP Top 10 auditor that walks a repository end to end.
+An OWASP Top 10 auditor that sweeps a repository for vulnerable patterns, secrets and dependencies, and reports in SARIF for CI. Incremental mode rescans only the diff.
 
-A cheap, deterministic Rust harness sweeps the tree for vulnerable patterns, hardcoded secrets and vulnerable dependencies, then reports as SARIF so it drops straight into a CI annotation pipeline. Incremental mode rescans only the diff.
-
-`rust` · `SAST` · `SARIF` · `secrets detection` · `incremental scanning`
+`rust` · `SAST` · `SARIF` · `incremental scanning`
 
 ### 🎼 [Agent-Orchestra](https://github.com/DecoudJuan/Agent-Orchestra) · Python
 
-A coding agent built from scratch — a raw agentic loop, no frameworks.
-
-An orchestrator coordinates specialised sub-agents (explorer, researcher, implementer, tester, reviewer) over an OpenAI-compatible API. Written to find out what an agent framework is actually doing under the abstraction, so everything between the LLM and its tools is visible and editable.
+A coding agent built from scratch on a raw agentic loop: an orchestrator and specialised sub-agents, with nothing hidden behind a framework.
 
 `agentic loop` · `multi-agent` · `tool calling` · `no frameworks`
 
 ### 🧾 [Vexa](https://github.com/DecoudJuan/Vexa) · Python
 
-A desktop invoicing app that replaced a legacy Microsoft Access system, in production.
-
-Clients, products and documents in PySide6 over SQLite. The Access migration is a one-time bootstrap step — at runtime the app depends on no ODBC driver and no Access install, which is the entire reason the replacement was worth doing.
+A desktop invoicing app that replaced a legacy Microsoft Access system in a real business, with no ODBC driver or Access install needed at runtime.
 
 `PySide6 / Qt` · `SQLite` · `legacy migration` · `PyInstaller`
 
 ### 🗺️ [Track Optimizer](https://github.com/DecoudJuan/TrackOptimizer) · JavaScript
 
-Orders a list of stops into the shortest driving route. [**Live →**](https://trackoptimizer.vercel.app)
+Orders a list of stops into the shortest driving route, within about 5% of optimal, on open map services with no billing account. [**Live →**](https://trackoptimizer.vercel.app)
 
-Google Maps routes stops in the order you type them; for a delivery round the *order* is the whole problem. Nearest-neighbour lands ~20–25% above optimal, so a 2-opt pass uncrosses the path and pulls it to within ~5%. Built on Leaflet, OpenStreetMap, Nominatim and OSRM, so it needs no billing account and runs the moment you clone it — one `index.html`, no build step.
+`2-opt` · `Leaflet` · `OSRM` · `no build step`
 
 ### ⚔️ [Isometric God of War](https://github.com/DecoudJuan/isometric-god-of-war) · JavaScript
 
-A Vampire Survivors-style roguelite in the God of War universe. [**Play →**](https://decoudjuan.github.io/isometric-god-of-war)
-
-Isometric 2.5D, pixel art generated **100% in code**. No assets, no dependencies, no build — the entire game is one `index.html`.
+A Vampire Survivors-style roguelite in the God of War universe, with pixel art generated entirely in code, in a single `index.html`. [**Play →**](https://decoudjuan.github.io/isometric-god-of-war)
 
 `HTML5 Canvas` · `procedural pixel art` · `zero dependencies`
 
@@ -119,15 +94,9 @@ Isometric 2.5D, pixel art generated **100% in code**. No assets, no dependencies
 
 ---
 
-<p align="center">
-  <sub>Open to roles and freelance · <a href="https://decoudjuan.github.io">decoudjuan.github.io</a></sub>
-</p>
-
----
-
 ## Documentos
 
-- [assets/](assets/): la card del encabezado (`header-light.svg` y `header-dark.svg`) y `gen.py`, el script de Python que las genera, para regenerarlas al cambiar el contenido.
+- [assets/](assets/): el header (`header-light.svg` y `header-dark.svg`) y `gen.py`, el script de Python que los genera, para regenerarlos al cambiar el contenido.
 
 ## Licencia
 
